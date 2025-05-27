@@ -2,7 +2,7 @@
 set -e
 
 OUTPUT_FOLDER=${OUTPUT_FOLDER:-"results"}
-PREFIX=${PREFIX:-"MI300X"}
+PREFIX=${PREFIX:-"MI308X"}
 
 function parse_mla_result_to_csv {
     # Create output CSV file with header
@@ -60,28 +60,40 @@ print_success() {
     echo -e "${GREEN}✓ $1${NC}\n"  
 }  
 
-# FlashMLA  
-print_header "Profiling FlashMLA"  
-print_step "Running FlashMLA profiling..."  
-python python/test_flash_mla.py | parse_mla_result_to_csv $mla_out  
-print_success "FlashMLA results dumped to: $mla_out"  
+# FlashMLA
+print_header "Profiling FlashMLA"
+print_step "Running FlashMLA profiling..."
+python python/test_flash_mla.py | parse_mla_result_to_csv $mla_out
+print_success "FlashMLA results dumped to: $mla_out"
 
-# DeepGemm  
-print_header "Profiling DeepGemm"  
-print_step "Running DeepGemm profiling..."  
-python python/test_decode_gemms.py --output-dir $OUTPUT_FOLDER --prefix ${PREFIX}_  
-print_success "DeepGemm results dumped to:\n  ├─ $dense_gemm_out\n  └─ $group_gemm_out\n └─ $batch_gemm_out"  
+# DeepGemm
+print_header "Profiling DeepGemm"
+print_step "Running DeepGemm profiling..."
+python python/test_decode_gemms.py --output-dir $OUTPUT_FOLDER --prefix ${PREFIX}_
+print_success "DeepGemm results dumped to:\n  ├─ $dense_gemm_out\n  └─ $group_gemm_out\n └─ $batch_gemm_out"
 
-# Process final result  
-print_header "Processing Output Tables"  
-print_step "Generating final results..."  
+Process final result
+print_header "Processing Output Tables"
+print_step "Generating final results..."
+
+# For deepEP + alltoall
 python python/process_table.py --dense_gemm $dense_gemm_out \
                        --group_gemm $group_gemm_out \
                        --batch_gemm $batch_gemm_out \
                        --mla $mla_out \
                        --output_path $OUTPUT_FOLDER \
-                       --output_prefix ${PREFIX}-  
+                       --output_prefix ${PREFIX}-
 
-print_success "Final results generated at:\n  ├─ $OUTPUT_FOLDER/${PREFIX}-two-microbatch-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-single-batch-comp-comm-overlapping.csv"  
+print_success "Final results generated at:\n  ├─ $OUTPUT_FOLDER/${PREFIX}-two-microbatch-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-single-batch-comp-comm-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-no-microbatch-overlapping.csv"
+
+# For EPMoE + all-reduce
+python python/process_table_epmoe.py --dense_gemm $dense_gemm_out \
+                       --group_gemm $group_gemm_out \
+                       --batch_gemm $batch_gemm_out \
+                       --mla $mla_out \
+                       --output_path $OUTPUT_FOLDER \
+                       --output_prefix ${PREFIX}-
+
+print_success "Final results generated at:\n  ├─ $OUTPUT_FOLDER/${PREFIX}-epmoe-no-microbatch-overlapping.csv"
 
 print_header "Process Completed Successfully"

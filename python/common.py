@@ -66,11 +66,24 @@ GPUSpec = {
         "intra_node_bw": 315,
         "inter_node_bw": 39,
     },
+    # original
+    # "MI308X-192": {
+    #     "volume": 192,
+    #     "intra_node_bw": 315,
+    #     "inter_node_bw": 39,
+    # }
+    # for RCCL
     "MI308X-192": {
         "volume": 192,
-        "intra_node_bw": 315,
-        "inter_node_bw": 39,
+        "intra_node_bw": 180,
+        "inter_node_bw": 20,
     }
+    # for deepEP
+    # "MI308X-192": {
+    #     "volume": 192,
+    #     "intra_node_bw": 36,
+    #     "inter_node_bw": 8,
+    # }
 }
 
 
@@ -225,6 +238,8 @@ class TestConfig:
         """
         inter_node_bw = GPUSpec[self.gpu]['inter_node_bw']
         intra_node_bw = GPUSpec[self.gpu]['intra_node_bw']
+        print("---Una debug--- inter_node_bw = ", inter_node_bw)
+        print("---Una debug--- intra_node_bw = ", intra_node_bw)
 
         model_config = self.model_config
         inter_node_token = 8
@@ -234,19 +249,27 @@ class TestConfig:
             inter_node_token = model_config.topk
 
         ele_type = 1 if is_dispatch else 2
+        # we saw combine bw is about 1.5x slower than dispatch
+        time_scaling = 1 if is_dispatch else 1.5
         inter_node_comm_duration = param_num_to_GB(
-            model_config.d_h * inter_node_token * b_mla / tp * ele_type) / inter_node_bw * 10 ** 6  # in us
+            model_config.d_h * inter_node_token * b_mla / tp * ele_type) * time_scaling / inter_node_bw * 10 ** 6  # in us
 
         intra_node_comm_duration = param_num_to_GB(
-            model_config.d_h * min(model_config.topk - 1, 8) * b_mla * ele_type) / intra_node_bw * 10 ** 6
-        return max(inter_node_comm_duration, 5)
-        # return max(inter_node_comm_duration, intra_node_comm_duration)
+            model_config.d_h * min(model_config.topk - 1, 8) * b_mla * ele_type) * time_scaling / intra_node_bw * 10 ** 6
+
+        print("--Una debug--- inter_node_comm_duration = ", inter_node_comm_duration)
+        print("--Una debug--- intra_node_comm_duration = ", intra_node_comm_duration)
+
+        # return max(inter_node_comm_duration, 5)
+        # return max(intra_node_comm_duration, 5)
+        return max(inter_node_comm_duration, intra_node_comm_duration)
 
     def calculate_allreduce_time(self, tp: int, b_mla: int) -> float:
         """
         Per layer allreduce duration. By default, allreduce only performs inside nodes and in bf16 type.
         """
         intra_node_bw = GPUSpec[self.gpu]['intra_node_bw']
+        print("---Una debug--- intra_node_bw = ", intra_node_bw)
 
         model_config = self.model_config
 
@@ -256,7 +279,31 @@ class TestConfig:
         # lower bound for latency bound communication
         return max(intra_node_comm_duration, 5)
 
+    def calculate_internode_allreduce_time(self, d: int, tp: int, b_mla: int) -> float:
+        """
+        Internode allreduce duration. By default, allreduce only performs inside nodes and in bf16 type.
+        """
+        inter_node_bw = GPUSpec[self.gpu]['inter_node_bw']
+        print("---Una debug--- inter_node_bw = ", inter_node_bw)
+
+        model_config = self.model_config
+
+        ele_type = 2  # bf16
+
+        inter_node_token = 8
+        if d <= (model_config.topk + 1) * 8:
+            inter_node_token = math.ceil(d / 8) - 1
+        else:
+            inter_node_token = model_config.topk
+
+        inter_node_comm_duration = param_num_to_GB(
+            (d - 1) * model_config.d_h * inter_node_token * b_mla / tp * ele_type) / inter_node_bw * 10 ** 6  # in us
+
+        # lower bound for latency bound communication
+        return max(inter_node_comm_duration, 5)
+
 
 if __name__ == '__main__':
-    config = TestConfig(gpu="H20-96", debug=True)
+    # config = TestConfig(gpu="H20-96", debug=True)
+    config = TestConfig(gpu="MI308X-192", debug=True)
     config.generate_b_and_m_per_groups()

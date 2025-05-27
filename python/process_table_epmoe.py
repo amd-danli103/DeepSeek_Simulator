@@ -53,43 +53,27 @@ def process_data(dense_gemm_file: str, group_gemm_file: str, batch_gemm_file: st
         #                          (group_df['m_per_group'] == m_per_group) &
         #                          (group_df['b_mla'] == b_mla) &
         #                          (group_df['matrix_idx'] == 8)]['time_us'].iloc[0])
-
-        dispatch_alltoall = int(
-            config.calculate_alltoall_time(d, tp, b_mla, True))
-        combine_alltoall = int(
-            config.calculate_alltoall_time(d, tp, b_mla, False))
+    
+        allreduce_0 = int(
+            config.calculate_internode_allreduce_time(d, tp, b_mla)) if d > 8 else int(config.calculate_allreduce_time(tp, b_mla))
+        allreduce_1 = int(
+            config.calculate_internode_allreduce_time(d, tp, b_mla)) if d > 8 else int(config.calculate_allreduce_time(tp, b_mla))
 
         allreduce = int(config.calculate_allreduce_time(
             tp, b_mla)) if tp > 1 else 0
 
-        # 计算三种模式下的层时间
+        # 计算all-reduce模式下的层时间
         # none overlapping
-        t_moe_layer_none_overlap = int(dispatch_alltoall + shared_time + qkv_time +
-            up_gemm  + combine_alltoall + attn_time + o_time + allreduce)
+        t_moe_layer_none_overlap = int(allreduce_0 + shared_time + qkv_time + 
+            up_gemm  + allreduce_1 + attn_time + o_time)
         t_dense_layer_none_overlap = int(
-            shared_time + qkv_time + up_gemm + attn_time + o_time + allreduce)
-        # Two microbatch overlapping
-        t_moe_layer_two = int(2 * (max(dispatch_alltoall, shared_time + qkv_time) +
-                              up_gemm  +
-                              max(attn_time + o_time + allreduce, combine_alltoall)))
-        t_dense_layer_two = int(
-            2 * (shared_time + qkv_time + up_gemm + attn_time + o_time + allreduce))
-        # Single batch comp-compute overlapping
-        t_moe_layer_single = int(max(dispatch_alltoall, shared_time) + qkv_time +
-                                 max(up_gemm, combine_alltoall) + attn_time + o_time + allreduce)
-        t_dense_layer_single = int(
             shared_time + qkv_time + up_gemm + attn_time + o_time + allreduce)
 
         # 计算TPOT和吞吐量
         tpot_none_overlap = int(
             (t_moe_layer_none_overlap * 58 + t_dense_layer_none_overlap * 3) / 1000)
-        tpot_two = int((t_moe_layer_two * 58 + t_dense_layer_two * 3) / 1000)
-        tpot_single = int(
-            (t_moe_layer_single * 58 + t_dense_layer_single * 3) / 1000)
 
         throughput_none_overlap = int(b_mla * 1000 / tp / tpot_none_overlap)
-        throughput_two = int(b_mla * 2 * 1000 / tp / tpot_two)
-        throughput_single = int(b_mla * 1000 / tp / tpot_single)
 
         # 存储结果
         base_result = {
@@ -102,10 +86,9 @@ def process_data(dense_gemm_file: str, group_gemm_file: str, batch_gemm_file: st
             'Shared(us)': shared_time,
             'Up_Gemm(us)': up_gemm,
             'Down_Gemm(us)': 0,
-            'Dispatch_AlltoAll(us)': dispatch_alltoall,
-            'Combine_AlltoAll(us)': combine_alltoall,
+            'AllReduce_0(us)': allreduce_0,
+            'AllReduce_1(us)': allreduce_1,
             'AllReduce(us)': allreduce,
-
         }
 
         results.append({
@@ -117,50 +100,20 @@ def process_data(dense_gemm_file: str, group_gemm_file: str, batch_gemm_file: st
             'mode': 'none-overlap'
         })
 
-        results.append({
-            **base_result,
-            't_{dense_layer}(us)': t_dense_layer_two,
-            't_{moe_layer}(us)': t_moe_layer_two,
-            'TPOT(ms)': tpot_two,
-            'Single-Device Throughput(Tokens/s)': throughput_two,
-            'mode': 'two-microbatch'
-        })
-
-        results.append({
-            **base_result,
-            't_{dense_layer}(us)': t_dense_layer_single,
-            't_{moe_layer}(us)': t_moe_layer_single,
-            'TPOT(ms)': tpot_single,
-            'Single-Device Throughput(Tokens/s)': throughput_single,
-            'mode': 'single-batch'
-        })
-
     # 创建DataFrame并保存结果
     results_df = pd.DataFrame(results)
 
-    # 分别保存三种模式的结果
     no_microbatch_df = results_df[results_df['mode']
                                    == 'none-overlap'].drop('mode', axis=1)
-    two_microbatch_df = results_df[results_df['mode']
-                                   == 'two-microbatch'].drop('mode', axis=1)
-    single_batch_df = results_df[results_df['mode']
-                                 == 'single-batch'].drop('mode', axis=1)
 
     def float_format(x): return '{:.2f}'.format(
         x) if isinstance(x, float) else x
 
     no_microbatch_outfile = os.path.join(
-        output_path, output_prefix + 'no-microbatch-overlapping.csv')
-    two_microbatch_outfile = os.path.join(
-        output_path, output_prefix + 'two-microbatch-overlapping.csv')
-    single_batch_outfile = os.path.join(
-        output_path, output_prefix + 'single-batch-comp-comm-overlapping.csv')
+        output_path, output_prefix + 'epmoe-no-microbatch-overlapping.csv')
+
     no_microbatch_df.to_csv(no_microbatch_outfile,
                              index=False, float_format=float_format)
-    two_microbatch_df.to_csv(two_microbatch_outfile,
-                             index=False, float_format=float_format)
-    single_batch_df.to_csv(single_batch_outfile,
-                           index=False, float_format=float_format)
 
 
 def main():
@@ -188,3 +141,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
