@@ -72,19 +72,22 @@ print_step "Running DeepGemm profiling..."
 python python/test_decode_gemms.py --output-dir $OUTPUT_FOLDER --prefix ${PREFIX}_
 print_success "DeepGemm results dumped to:\n  ├─ $dense_gemm_out\n  └─ $group_gemm_out\n └─ $batch_gemm_out"
 
-Process final result
+# Process final result
 print_header "Processing Output Tables"
 print_step "Generating final results..."
 
-# For deepEP + alltoall
-python python/process_table.py --dense_gemm $dense_gemm_out \
-                       --group_gemm $group_gemm_out \
-                       --batch_gemm $batch_gemm_out \
-                       --mla $mla_out \
-                       --output_path $OUTPUT_FOLDER \
-                       --output_prefix ${PREFIX}-
+# Pls modify GPUSpec intra/inter bw in python/common.py accordingly
+# and execute only one of the process below
 
-print_success "Final results generated at:\n  ├─ $OUTPUT_FOLDER/${PREFIX}-two-microbatch-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-single-batch-comp-comm-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-no-microbatch-overlapping.csv"
+# # For deepEP + alltoall
+# python python/process_table.py --dense_gemm $dense_gemm_out \
+#                        --group_gemm $group_gemm_out \
+#                        --batch_gemm $batch_gemm_out \
+#                        --mla $mla_out \
+#                        --output_path $OUTPUT_FOLDER \
+#                        --output_prefix ${PREFIX}-
+
+# print_success "Final results generated at:\n  ├─ $OUTPUT_FOLDER/${PREFIX}-two-microbatch-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-single-batch-comp-comm-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-no-microbatch-overlapping.csv"
 
 # For EPMoE + all-reduce
 python python/process_table_epmoe.py --dense_gemm $dense_gemm_out \
