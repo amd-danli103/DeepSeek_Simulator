@@ -75,14 +75,14 @@ GPUSpec = {
     # for RCCL
     "MI308X-192": {
         "volume": 192,
-        "intra_node_bw": 180,
-        "inter_node_bw": 20,
+        "intra_node_bw": 315,
+        "inter_node_bw": 30,
     }
-    # for deepEP
+    # # for deepEP, we assume 1:1 H20
     # "MI308X-192": {
     #     "volume": 192,
-    #     "intra_node_bw": 36,
-    #     "inter_node_bw": 8,
+    #     "intra_node_bw": 180,
+    #     "inter_node_bw": 39,
     # }
 }
 
@@ -100,7 +100,9 @@ class ModelConfig:
 
     # expert param
     # it is hard-coded and should be careful to change. device_nums is bonded to this value
-    expert_duplication_num: int = 32
+    # expert_duplication_num: int = 32
+    # do not introduce EPLB into this projection
+    expert_duplication_num: int = 0
     router_expert_num: int = 256
     moe_layer_num: int = 58
     dense_layer_num: int = 3
@@ -125,7 +127,7 @@ class ModelConfig:
 class TestConfig:
     device_nums: List[int] = None
     s: int = 5000 # mean seqlen
-    gpu: str = "H800-80"
+    gpu: str = "MI308X-192"
     model_config: ModelConfig = None
     tp_nums:  List[int] = None
     debug: bool = False
@@ -277,7 +279,7 @@ class TestConfig:
         intra_node_comm_duration = param_num_to_GB(
             2 * (tp - 1) / tp * model_config.d_h * b_mla * ele_type) / intra_node_bw * 10 ** 6
         # lower bound for latency bound communication
-        return max(intra_node_comm_duration, 5)
+        return max(intra_node_comm_duration, 100)
 
     def calculate_internode_allreduce_time(self, d: int, tp: int, b_mla: int) -> float:
         """
@@ -300,7 +302,7 @@ class TestConfig:
             (d - 1) * model_config.d_h * inter_node_token * b_mla / tp * ele_type) / inter_node_bw * 10 ** 6  # in us
 
         # lower bound for latency bound communication
-        return max(inter_node_comm_duration, 5)
+        return max(inter_node_comm_duration, 100)
 
 
 if __name__ == '__main__':
