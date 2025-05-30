@@ -66,24 +66,24 @@ GPUSpec = {
         "intra_node_bw": 315,
         "inter_node_bw": 39,
     },
-    # original
+    # # original - deepep
     # "MI308X-192": {
     #     "volume": 192,
     #     "intra_node_bw": 315,
     #     "inter_node_bw": 39,
     # }
-    # for RCCL
-    "MI308X-192": {
-        "volume": 192,
-        "intra_node_bw": 315,
-        "inter_node_bw": 30,
-    }
-    # # for deepEP, we assume 1:1 H20
+    # # for RCCL all-reduce/alltoall
     # "MI308X-192": {
     #     "volume": 192,
-    #     "intra_node_bw": 180,
-    #     "inter_node_bw": 39,
+    #     "intra_node_bw": 315,
+    #     "inter_node_bw": 30,
     # }
+    # for deepEP, we assume 1:1 H20
+    "MI308X-192": {
+        "volume": 192,
+        "intra_node_bw": 180,
+        "inter_node_bw": 39,
+    }
 }
 
 
@@ -253,6 +253,8 @@ class TestConfig:
         ele_type = 1 if is_dispatch else 2
         # we saw combine bw is about 1.5x slower than dispatch
         time_scaling = 1 if is_dispatch else 1.5
+        # for RCCL alltoall
+        # time_scaling = 1
         inter_node_comm_duration = param_num_to_GB(
             model_config.d_h * inter_node_token * b_mla / tp * ele_type) * time_scaling / inter_node_bw * 10 ** 6  # in us
 
@@ -278,6 +280,7 @@ class TestConfig:
         ele_type = 2  # bf16
         intra_node_comm_duration = param_num_to_GB(
             2 * (tp - 1) / tp * model_config.d_h * b_mla * ele_type) / intra_node_bw * 10 ** 6
+        print("---Una debug--- allreduce - intra_node_comm_duration is ", intra_node_comm_duration)
         # lower bound for latency bound communication
         return max(intra_node_comm_duration, 100)
 

@@ -79,24 +79,34 @@ print_step "Generating final results..."
 # Pls modify GPUSpec intra/inter bw in python/common.py accordingly
 # and execute only one of the process below
 
-# # For deepEP + alltoall
-# python python/process_table.py --dense_gemm $dense_gemm_out \
-#                        --group_gemm $group_gemm_out \
-#                        --batch_gemm $batch_gemm_out \
-#                        --mla $mla_out \
-#                        --output_path $OUTPUT_FOLDER \
-#                        --output_prefix ${PREFIX}-
-
-# print_success "Final results generated at:\n  ├─ $OUTPUT_FOLDER/${PREFIX}-two-microbatch-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-single-batch-comp-comm-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-no-microbatch-overlapping.csv"
-
-# For EPMoE + all-reduce
-python python/process_table_epmoe.py --dense_gemm $dense_gemm_out \
+# For deepEP + alltoall
+python python/process_table.py --dense_gemm $dense_gemm_out \
                        --group_gemm $group_gemm_out \
                        --batch_gemm $batch_gemm_out \
                        --mla $mla_out \
                        --output_path $OUTPUT_FOLDER \
                        --output_prefix ${PREFIX}-
 
-print_success "Final results generated at:\n  ├─ $OUTPUT_FOLDER/${PREFIX}-epmoe-no-microbatch-overlapping.csv"
+print_success "Final results generated at:\n  ├─ $OUTPUT_FOLDER/${PREFIX}-two-microbatch-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-single-batch-comp-comm-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-no-microbatch-overlapping.csv"
+
+# # For EPMoE + all-reduce
+# python python/process_table_epmoe.py --dense_gemm $dense_gemm_out \
+#                        --group_gemm $group_gemm_out \
+#                        --batch_gemm $batch_gemm_out \
+#                        --mla $mla_out \
+#                        --output_path $OUTPUT_FOLDER \
+#                        --output_prefix ${PREFIX}-
+
+# print_success "Final results generated at:\n  ├─ $OUTPUT_FOLDER/${PREFIX}-epmoe-no-microbatch-overlapping.csv"
+
+# # For EPMoE + all-to-all
+# python python/process_table_epmoe_all2all.py --dense_gemm $dense_gemm_out \
+#                        --group_gemm $group_gemm_out \
+#                        --batch_gemm $batch_gemm_out \
+#                        --mla $mla_out \
+#                        --output_path $OUTPUT_FOLDER \
+#                        --output_prefix ${PREFIX}-
+
+# print_success "Final results generated at:\n  ├─ $OUTPUT_FOLDER/${PREFIX}-epmoe-all2all-two-microbatch-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-epmoe-all2all-single-batch-comp-comm-overlapping.csv\n  └─ $OUTPUT_FOLDER/${PREFIX}-epmoe-alltoall-no-microbatch-overlapping.csv"
 
 print_header "Process Completed Successfully"
